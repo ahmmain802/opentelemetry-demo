@@ -1,7 +1,6 @@
 
 
 .github
-docs
 internal
 src/*/README.md
 src/*/Dockerfile

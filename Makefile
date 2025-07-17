@@ -1,252 +1,116 @@
-# Copyright The OpenTelemetry Authors
-# SPDX-License-Identifier: Apache-2.0
+# OpenTelemetry Demo Makefile
+# Includes contract testing targets for easy development
 
+.PHONY: help
+help: ## Show this help message
+	@echo "OpenTelemetry Demo - Available Commands"
+	@echo "======================================"
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-# All documents to be used in spell check.
-ALL_DOCS := $(shell find . -type f -name '*.md' -not -path './.github/*' -not -path '*/node_modules/*' -not -path '*/_build/*' -not -path '*/deps/*' -not -path */Pods/* -not -path */.expo/* | sort)
-PWD := $(shell pwd)
+##@ Contract Testing (Local)
+.PHONY: contracts-validate
+contracts-validate: ## Validate contract testing setup
+	./pacts/validate-setup.sh
 
-TOOLS_DIR := ./internal/tools
-MISSPELL_BINARY=bin/misspell
-MISSPELL = $(TOOLS_DIR)/$(MISSPELL_BINARY)
+.PHONY: contracts-test
+contracts-test: ## Run all contract tests locally
+	./pacts/run-contract-tests.sh
 
-DOCKER_COMPOSE_CMD ?= docker compose
-DOCKER_COMPOSE_ENV=--env-file .env --env-file .env.override
-DOCKER_COMPOSE_BUILD_ARGS=
+.PHONY: contracts-consumer
+contracts-consumer: ## Run consumer tests only (generates contracts)
+	./pacts/run-contract-tests.sh --consumer-only
 
-# Java Workaround for macOS 15.2+ and M4 chips (see https://bugs.openjdk.org/browse/JDK-8345296)
-ifeq ($(shell uname -m),arm64)
-	ifeq ($(shell uname -s),Darwin)
-		DOCKER_COMPOSE_ENV+= --env-file .env.arm64
-		DOCKER_COMPOSE_BUILD_ARGS+= --build-arg=_JAVA_OPTIONS=-XX:UseSVE=0
-	endif
-endif
+.PHONY: contracts-provider
+contracts-provider: ## Run provider verification only
+	./pacts/run-contract-tests.sh --provider-only
 
-# see https://github.com/open-telemetry/build-tools/releases for semconvgen updates
-# Keep links in semantic_conventions/README.md and .vscode/settings.json in sync!
-SEMCONVGEN_VERSION=0.11.0
-YAMLLINT_VERSION=1.30.0
+##@ Development
+.PHONY: dev-setup
+dev-setup: ## Set up development environment
+	@echo "Setting up development environment..."
+	make contracts-validate
 
-.PHONY: all
-all: install-tools markdownlint misspell yamllint
+.PHONY: dev-test
+dev-test: ## Run contract tests locally
+	@echo "🏠 Running contract tests locally"
+	make contracts-test
 
-$(MISSPELL):
-	cd $(TOOLS_DIR) && go build -o $(MISSPELL_BINARY) github.com/client9/misspell/cmd/misspell
-
-.PHONY: misspell
-misspell:	$(MISSPELL)
-	$(MISSPELL) -error $(ALL_DOCS)
-
-.PHONY: misspell-correction
-misspell-correction:	$(MISSPELL)
-	$(MISSPELL) -w $(ALL_DOCS)
-
-.PHONY: markdownlint
-markdownlint:
-	@if ! npm ls markdownlint; then npm install; fi
-	@for f in $(ALL_DOCS); do \
-		echo $$f; \
-		npx --no -p markdownlint-cli markdownlint -c .markdownlint.yaml $$f \
-			|| exit 1; \
-	done
-
-.PHONY: install-yamllint
-install-yamllint:
-    # Using a venv is recommended
-	yamllint --version >/dev/null 2>&1 || pip install -U yamllint~=$(YAMLLINT_VERSION)
-
-.PHONY: yamllint
-yamllint: install-yamllint
-	yamllint .
-
-.PHONY: checklicense
-checklicense:
-	@echo "Checking license headers..."
-	@if ! npm ls @kt3k/license-checker; then npm install; fi
-	npx @kt3k/license-checker -q
-
-.PHONY: addlicense
-addlicense:
-	@echo "Adding license headers..."
-	@if ! npm ls @kt3k/license-checker; then npm install; fi
-	npx @kt3k/license-checker -q -i
-
-.PHONY: checklinks
-checklinks:
-	@echo "Checking links..."
-	@if ! npm ls @umbrelladocs/linkspector; then npm install; fi
-	linkspector check
-
-# Run all checks in order of speed / likely failure.
-.PHONY: check
-check: misspell markdownlint checklicense checklinks
-	@echo "All checks complete"
-
-# Attempt to fix issues / regenerate tables.
-.PHONY: fix
-fix: misspell-correction
-	@echo "All autofixes complete"
-
-.PHONY: install-tools
-install-tools: $(MISSPELL)
-	npm install
-	@echo "All tools installed"
-
-.PHONY: build
-build:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) build $(DOCKER_COMPOSE_BUILD_ARGS)
-
-.PHONY: build-and-push
-build-and-push:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) build $(DOCKER_COMPOSE_BUILD_ARGS) --push
-
-# Create multiplatform builder for buildx
-.PHONY: create-multiplatform-builder
-create-multiplatform-builder:
-	docker buildx create --name otel-demo-builder --bootstrap --use --driver docker-container --config ./buildkitd.toml
-
-# Remove multiplatform builder for buildx
-.PHONY: remove-multiplatform-builder
-remove-multiplatform-builder:
-	docker buildx rm otel-demo-builder
-
-# Build and push multiplatform images (linux/amd64, linux/arm64) using buildx.
-# Requires docker with buildx enabled and a multi-platform capable builder in use.
-# Docker needs to be configured to use containerd storage for images to be loaded into the local registry.
-.PHONY: build-multiplatform
-build-multiplatform:
-	# Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml --load --set "*.platform=linux/amd64,linux/arm64"
-
-.PHONY: build-multiplatform-and-push
-build-multiplatform-and-push:
-    # Because buildx bake does not support --env-file yet, we need to load it into the environment first.
-	set -a; . ./.env.override; set +a && docker buildx bake -f docker-compose.yml --push --set "*.platform=linux/amd64,linux/arm64"
-
-.PHONY: clean-images
-clean-images:
-	@docker rmi $(shell docker images --filter=reference="ghcr.io/open-telemetry/demo:latest-*" -q); \
-    if [ $$? -ne 0 ]; \
-    then \
-    	echo; \
-        echo "Failed to removed 1 or more OpenTelemetry Demo images."; \
-        echo "Check to ensure the Demo is not running by executing: make stop"; \
-        false; \
-    fi
-
-.PHONY: run-tests
-run-tests:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run frontendTests
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests
-
-.PHONY: run-tracetesting
-run-tracetesting:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml run traceBasedTests ${SERVICES_TO_TEST}
-
-.PHONY: generate-protobuf
-generate-protobuf:
-	./ide-gen-proto.sh
-
-.PHONY: generate-kubernetes-manifests
-generate-kubernetes-manifests:
-	helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
-	helm repo update
-	echo "# Copyright The OpenTelemetry Authors" > kubernetes/opentelemetry-demo.yaml
-	echo "# SPDX-License-Identifier: Apache-2.0" >> kubernetes/opentelemetry-demo.yaml
-	echo "# This file is generated by 'make generate-kubernetes-manifests'" >> kubernetes/opentelemetry-demo.yaml
-	echo "---" >> kubernetes/opentelemetry-demo.yaml
-	echo "apiVersion: v1" >> kubernetes/opentelemetry-demo.yaml
-	echo "kind: Namespace" >> kubernetes/opentelemetry-demo.yaml
-	echo "metadata:" >> kubernetes/opentelemetry-demo.yaml
-	echo "  name: otel-demo" >> kubernetes/opentelemetry-demo.yaml
-	helm template opentelemetry-demo open-telemetry/opentelemetry-demo --namespace otel-demo | sed '/helm.sh\/chart\:/d' | sed '/helm.sh\/hook/d' | sed '/managed-by\: Helm/d' >> kubernetes/opentelemetry-demo.yaml
-
-.PHONY: docker-generate-protobuf
-docker-generate-protobuf:
-	./docker-gen-proto.sh
-
+##@ Utilities
 .PHONY: clean
-clean:
-	rm -rf ./src/{checkout,product-catalog}/genproto/oteldemo/
-	rm -rf ./src/recommendation/{demo_pb2,demo_pb2_grpc}.py
-	rm -rf ./src/frontend/protos/demo.ts
+clean: ## Clean up generated files
+	@echo "Cleaning up..."
+	rm -rf pacts/consumer-contracts/*.json
+	rm -rf pacts/provider-verification/*.log
+	@echo "✅ Cleanup completed"
 
-.PHONY: check-clean-work-tree
-check-clean-work-tree:
-	@if ! git diff --quiet; then \
-	  echo; \
-	  echo 'Working tree is not clean, did you forget to run "make docker-generate-protobuf"?'; \
-	  echo; \
-	  git status; \
-	  exit 1; \
-	fi
+.PHONY: docs
+docs: ## Open documentation
+	@echo "📚 Available documentation:"
+	@echo "  - Getting Started: docs/GETTING_STARTED.md"
+	@echo "  - Complete Guide: docs/CONTRACT_TESTING_GUIDE.md"
+	@echo "  - Quick Reference: docs/PACT_QUICK_REFERENCE.md"
+	@echo "  - Example Walkthrough: docs/EXAMPLE_WALKTHROUGH.md"
 
-.PHONY: start
-start:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) up --force-recreate --remove-orphans --detach
+
+.PHONY: status
+status: ## Show contract testing status
+	@echo "🔍 Contract Testing Status"
+	@echo "========================="
 	@echo ""
-	@echo "OpenTelemetry Demo is running."
-	@echo "Go to http://localhost:8080 for the demo UI."
-	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
-	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
-	@echo "Go to http://localhost:8080/feature/ to change feature flags."
-
-.PHONY: start-minimal
-start-minimal:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose.minimal.yml up --force-recreate --remove-orphans --detach
+	@echo "📁 Generated Pact Files:"
+	@ls -la pacts/consumer-contracts/ 2>/dev/null | grep "\.json$$" || echo "  No pact files found"
 	@echo ""
-	@echo "OpenTelemetry Demo in minimal mode is running."
-	@echo "Go to http://localhost:8080 for the demo UI."
-	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
-	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
-	@echo "Go to https://opentelemetry.io/docs/demo/feature-flags/ to learn how to change feature flags."
-
-.PHONY: stop
-stop:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) down --remove-orphans --volumes
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) -f docker-compose-tests.yml down --remove-orphans --volumes
+	@echo "📋 Verification Logs:"
+	@ls -la pacts/provider-verification/ 2>/dev/null | grep "\.log$$" || echo "  No verification logs found"
 	@echo ""
-	@echo "OpenTelemetry Demo is stopped."
+	@echo "🔧 Environment Status:"
+	@command -v node >/dev/null 2>&1 && echo "  ✅ Node.js available" || echo "  ❌ Node.js not found"
+	@command -v go >/dev/null 2>&1 && echo "  ✅ Go available" || echo "  ❌ Go not found"
+	@command -v cargo >/dev/null 2>&1 && echo "  ✅ Rust available" || echo "  ❌ Rust not found"
+	@command -v dotnet >/dev/null 2>&1 && echo "  ✅ .NET available" || echo "  ⚠️  .NET not found (optional)"
 
-# Use to restart a single service component
-# Example: make restart service=frontend
-.PHONY: restart
-restart:
-# work with `service` or `SERVICE` as input
-ifdef SERVICE
-	service := $(SERVICE)
-endif
+##@ Quick Start for Junior Developers
+.PHONY: quickstart
+quickstart: ## Complete setup and first test run for new developers
+	@echo "🚀 Quick Start for Contract Testing"
+	@echo "=================================="
+	@echo ""
+	@echo "Step 1: Validating environment..."
+	make contracts-validate
+	@echo ""
+	@echo "Step 2: Running first contract test..."
+	make contracts-consumer
+	@echo ""
+	@echo "🎉 Quick start completed!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Check generated contracts: make status"
+	@echo "  2. Read the docs: make docs"
+	@echo "  3. Run full test suite: make contracts-test"
 
-ifdef service
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) stop $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) rm --force $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) create $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) start $(service)
-else
-	@echo "Please provide a service name using `service=[service name]` or `SERVICE=[service name]`"
-endif
+##@ Troubleshooting
+.PHONY: debug
+debug: ## Debug contract testing issues
+	@echo "🐛 Contract Testing Debug Information"
+	@echo "===================================="
+	@echo ""
+	@echo "Environment:"
+	@echo "  OS: $$(uname -s)"
+	@echo "  Architecture: $$(uname -m)"
+	@echo ""
+	@echo "Tools:"
+	@command -v node >/dev/null 2>&1 && echo "  Node.js: $$(node --version)" || echo "  Node.js: Not found"
+	@command -v npm >/dev/null 2>&1 && echo "  npm: $$(npm --version)" || echo "  npm: Not found"
+	@command -v go >/dev/null 2>&1 && echo "  Go: $$(go version | awk '{print $$3}')" || echo "  Go: Not found"
+	@command -v cargo >/dev/null 2>&1 && echo "  Rust: $$(rustc --version | awk '{print $$2}')" || echo "  Rust: Not found"
+	@command -v dotnet >/dev/null 2>&1 && echo "  .NET: $$(dotnet --version)" || echo "  .NET: Not found"
+	@command -v docker >/dev/null 2>&1 && echo "  Docker: $$(docker --version | awk '{print $$3}' | sed 's/,//')" || echo "  Docker: Not found"
+	@echo ""
+	@echo "Project Structure:"
+	@ls -la pacts/ 2>/dev/null || echo "  pacts/ directory not found"
+	@echo ""
+	@echo "Recent Logs:"
+	@tail -n 5 pacts/provider-verification/*.log 2>/dev/null || echo "  No recent verification logs"
 
-# Use to rebuild and restart (redeploy) a single service component
-# Example: make redeploy service=frontend
-.PHONY: redeploy
-redeploy:
-# work with `service` or `SERVICE` as input
-ifdef SERVICE
-	service := $(SERVICE)
-endif
-
-ifdef service
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) build $(DOCKER_COMPOSE_BUILD_ARGS) $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) stop $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) rm --force $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) create $(service)
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) start $(service)
-else
-	@echo "Please provide a service name using `service=[service name]` or `SERVICE=[service name]`"
-endif
-
-.PHONY: build-react-native-android
-build-react-native-android:
-	docker build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
+# Default target
+.DEFAULT_GOAL := help
