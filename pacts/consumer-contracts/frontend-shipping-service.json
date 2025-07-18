@@ -1,0 +1,356 @@
+{
+  "consumer": {
+    "name": "frontend"
+  },
+  "interactions": [
+    {
+      "description": "a request for shipping quote that returns malformed JSON",
+      "providerState": "shipping service returns malformed response",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Mountain View",
+            "country": "United States",
+            "state": "CA",
+            "street_address": "1600 Amphitheatre Parkway",
+            "zip_code": "94043"
+          },
+          "items": [
+            {
+              "product_id": "OLJCESPC7Z",
+              "quantity": 1
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.address": {
+            "match": "type"
+          },
+          "$.body.items": {
+            "match": "type",
+            "min": 1
+          },
+          "$.body.items[*].product_id": {
+            "match": "type"
+          },
+          "$.body.items[*].quantity": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": "Internal Server Error",
+        "headers": {
+          "Content-Type": "text/plain"
+        },
+        "status": 500
+      }
+    },
+    {
+      "description": "a request for shipping quote with empty items array",
+      "providerState": "shipping service is available",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Mountain View",
+            "country": "United States",
+            "state": "CA",
+            "street_address": "1600 Amphitheatre Parkway",
+            "zip_code": "94043"
+          },
+          "items": []
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.address": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "INVALID_REQUEST",
+            "message": "Items array cannot be empty"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.error.code": {
+            "match": "type"
+          },
+          "$.body.error.message": {
+            "match": "type"
+          }
+        },
+        "status": 400
+      }
+    },
+    {
+      "description": "a request for shipping quote with international address",
+      "providerState": "shipping service is available",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Toronto",
+            "country": "Canada",
+            "state": "ON",
+            "street_address": "123 International St",
+            "zip_code": "M5V 3A8"
+          },
+          "items": [
+            {
+              "product_id": "OLJCESPC7Z",
+              "quantity": 1
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.address": {
+            "match": "type"
+          },
+          "$.body.items": {
+            "match": "type",
+            "min": 1
+          },
+          "$.body.items[*].product_id": {
+            "match": "type"
+          },
+          "$.body.items[*].quantity": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": {
+          "cost_usd": {
+            "currency_code": "USD",
+            "nanos": 990000000,
+            "units": 12
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.cost_usd.nanos": {
+            "match": "type"
+          },
+          "$.body.cost_usd.units": {
+            "match": "type"
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for shipping quote with missing address fields",
+      "providerState": "shipping service is available",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Mountain View",
+            "country": "United States",
+            "state": "",
+            "street_address": "1600 Amphitheatre Parkway",
+            "zip_code": ""
+          },
+          "items": [
+            {
+              "product_id": "OLJCESPC7Z",
+              "quantity": 1
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.items": {
+            "match": "type",
+            "min": 1
+          },
+          "$.body.items[*].product_id": {
+            "match": "type"
+          },
+          "$.body.items[*].quantity": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "INVALID_REQUEST",
+            "message": "Missing required address fields"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.error.code": {
+            "match": "type"
+          },
+          "$.body.error.message": {
+            "match": "type"
+          }
+        },
+        "status": 400
+      }
+    },
+    {
+      "description": "a request for shipping quote with single item",
+      "providerState": "shipping service is available",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Mountain View",
+            "country": "United States",
+            "state": "CA",
+            "street_address": "1600 Amphitheatre Parkway",
+            "zip_code": "94043"
+          },
+          "items": [
+            {
+              "product_id": "OLJCESPC7Z",
+              "quantity": 1
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.address": {
+            "match": "type"
+          },
+          "$.body.items[0].product_id": {
+            "match": "type"
+          },
+          "$.body.items[0].quantity": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": {
+          "cost_usd": {
+            "currency_code": "USD",
+            "nanos": 990000000,
+            "units": 8
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.cost_usd.nanos": {
+            "match": "type"
+          },
+          "$.body.cost_usd.units": {
+            "match": "type"
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a request for shipping quote with valid items and address",
+      "providerState": "shipping service is available",
+      "request": {
+        "body": {
+          "address": {
+            "city": "Mountain View",
+            "country": "United States",
+            "state": "CA",
+            "street_address": "1600 Amphitheatre Parkway",
+            "zip_code": "94043"
+          },
+          "items": [
+            {
+              "product_id": "OLJCESPC7Z",
+              "quantity": 2
+            }
+          ]
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.address": {
+            "match": "type"
+          },
+          "$.body.items": {
+            "match": "type",
+            "min": 1
+          },
+          "$.body.items[*].product_id": {
+            "match": "type"
+          },
+          "$.body.items[*].quantity": {
+            "match": "type"
+          }
+        },
+        "method": "POST",
+        "path": "/get-quote"
+      },
+      "response": {
+        "body": {
+          "cost_usd": {
+            "currency_code": "USD",
+            "nanos": 990000000,
+            "units": 8
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.body.cost_usd.nanos": {
+            "match": "type"
+          },
+          "$.body.cost_usd.units": {
+            "match": "type"
+          }
+        },
+        "status": 200
+      }
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "13.2.0"
+    },
+    "pactRust": {
+      "ffi": "0.4.22",
+      "models": "1.2.3"
+    },
+    "pactSpecification": {
+      "version": "2.0.0"
+    }
+  },
+  "provider": {
+    "name": "shipping-service"
+  }
+}

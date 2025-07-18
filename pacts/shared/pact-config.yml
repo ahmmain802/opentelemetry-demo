@@ -1,0 +1,60 @@
+# Shared Pact Configuration
+pact:
+  # Consumer version selectors for provider verification
+  consumer_version_selectors:
+    - latest: true
+      tag: main
+    - latest: true
+      tag: develop
+  
+  # Provider version tags
+  provider_version_tags:
+    - main
+    - develop
+  
+  # Publish verification results
+  publish_verification_results: true
+  
+  # Pact file locations
+  pact_dir: "../consumer-contracts"
+  log_dir: "../provider-verification"
+  
+  # Timeout settings
+  timeout: 30000
+  
+  # Log level for Pact operations
+  log_level: "INFO"
+
+# Service-specific configuration
+services:
+  frontend:
+    consumer_name: "Frontend"
+    base_url: "http://localhost:3000"
+    
+  shipping:
+    provider_name: "Shipping"
+    base_url: "http://localhost:8080"
+    
+  checkout:
+    consumer_name: "Checkout"
+    base_url: "http://localhost:8081"
+    
+  accounting:
+    provider_name: "Accounting"
+    kafka_topic: "orders"
+    kafka_bootstrap_servers: "localhost:9092"
+
+# Test data configuration
+test_data:
+  valid_products:
+    - product_id: "OLJCESPC7Z"
+      name: "Vintage Typewriter"
+    - product_id: "66VCHSJNUP" 
+      name: "Vintage Camera Lens"
+  
+  valid_address:
+    street_address: "1600 Amphitheatre Parkway"
+    city: "Mountain View"
+    state: "CA"
+    country: "United States"
+    zip_code: "94043"
