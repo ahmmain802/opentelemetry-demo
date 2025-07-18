@@ -1,4 +1,4 @@
-use pact_verifier::*;
+// Removed pact_verifier dependency - using simplified approach
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,16 +18,14 @@ impl PactTestHelper {
         }
     }
 
-    /// Set up provider verification for HTTP-based contracts
-    pub fn setup_provider_verification(&self, provider_name: &str, provider_url: &str) -> ProviderInfo {
-        ProviderInfo {
-            name: provider_name.to_string(),
-            host: provider_url.to_string(),
-            port: None,
-            path: "/".to_string(),
-            protocol: "http".to_string(),
-            ..Default::default()
-        }
+    /// Set up provider verification configuration for HTTP-based contracts
+    pub fn setup_provider_verification(&self, provider_name: &str, provider_url: &str) -> HashMap<String, String> {
+        let mut config = HashMap::new();
+        config.insert("name".to_string(), provider_name.to_string());
+        config.insert("host".to_string(), provider_url.to_string());
+        config.insert("path".to_string(), "/".to_string());
+        config.insert("protocol".to_string(), "http".to_string());
+        config
     }
 
     /// Load pact files from the consumer contracts directory
