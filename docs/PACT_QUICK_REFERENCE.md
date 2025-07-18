@@ -1,261 +1,269 @@
-# Pact Contract Testing - Quick Reference
+# Pact Broker Dashboard Quick Reference Guide
 
-## 🚀 Quick Start Commands
+## 🌐 Accessing Your Dashboard
 
-```bash
-# Run all contract tests
-./pacts/run-contract-tests.sh
+**URL**: http://localhost:9292
+- **Username**: `pact_broker`
+- **Password**: `pact_broker`
 
-# Run only consumer tests (generates contracts)
-./pacts/run-contract-tests.sh --consumer-only
+## 📊 Main Dashboard Overview
 
-# Run only provider verification
-./pacts/run-contract-tests.sh --provider-only
+### What You'll See First
 
-# Skip dependency installation
-./pacts/run-contract-tests.sh --skip-deps
-```
-
-## 📁 Project Structure
+When you open the Pact Broker, you'll land on the **main dashboard** which shows:
 
 ```
-pacts/
-├── consumer-contracts/          # 📄 Generated pact files
-├── provider-verification/       # 📋 Verification logs
-├── shared/                     # 🔧 Shared utilities
-│   ├── pact-config.yml        # ⚙️ Configuration
-│   └── test-utils.ts          # 🛠️ TypeScript helpers
-└── run-contract-tests.sh      # 🎯 Master script
-
-src/
-├── frontend/__tests__/contracts/    # 🌐 Frontend consumer tests
-├── checkout/contracts/              # 🛒 Checkout consumer tests  
-├── shipping/tests/                  # 🚚 Shipping provider tests
-└── accounting/Tests/                # 💰 Accounting provider tests
+┌─────────────────────────────────────────────────────────┐
+│                    Pact Broker                          │
+├─────────────────────────────────────────────────────────┤
+│  Consumer    │  Provider         │  Status  │  Last     │
+│              │                   │          │  Verified │
+├─────────────────────────────────────────────────────────┤
+│  frontend    │  shipping-service │    ❌    │  Never    │
+│              │                   │          │           │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## 🔄 Testing Workflow
+### Understanding the Status Icons
 
+| Icon | Meaning | What It Tells You |
+|------|---------|-------------------|
+| ✅ | **Verified** | Provider successfully meets consumer's expectations |
+| ❌ | **Failed** | Provider verification failed - API compatibility issues |
+| ⏳ | **Pending** | Contract exists but hasn't been verified yet |
+| ❓ | **Unknown** | No verification has been attempted |
+
+## 🔍 Reading Contract Details
+
+### Click on Any Contract Row
+
+When you click on `frontend → shipping-service`, you'll see:
+
+#### **1. Contract Summary**
 ```
-1. Write Consumer Test → 2. Generate Pact File → 3. Verify Provider → 4. Deploy
-   (Frontend)              (contract.json)        (Shipping API)     (✅ Safe)
-```
-
-## 📝 Common Matchers
-
-### TypeScript/JavaScript
-```typescript
-import { MatchersV3 } from '@pact-foundation/pact';
-const { like, eachLike, term, regex } = MatchersV3;
-
-// Type matching
-like(123)                    // Any number
-like('string')               // Any string
-like(true)                   // Any boolean
-
-// Array matching
-eachLike(like('item'))       // Array of strings
-eachLike({id: like(1)}, {min: 2}) // Array with min 2 objects
-
-// Pattern matching
-regex('^\\d{5}$', '12345')   // Zip code pattern
-term({
-  generate: 'hello',
-  matcher: '^h.*o$'
-})
-
-// Optional fields
-like('value').optional()     // Field may be missing
+Consumer: frontend (version 1.0.0)
+Provider: shipping-service
+Status: ❌ Verification Failed
+Last Verified: Never
 ```
 
-### Go
-```go
-import "github.com/pact-foundation/pact-go/v2/matchers"
+#### **2. Interactions Section**
+This shows the **exact API expectations**:
 
-matchers.Like("string")           // Any string
-matchers.Like(123)               // Any number
-matchers.EachLike(obj, 1)        // Array with min 1 item
-matchers.Regex("^\\d+$", "123")  // Pattern matching
-```
-
-### Rust
-```rust
-// In pact_utils.rs helper functions
-json!({
-    "id": like(123),
-    "name": like("Product Name"),
-    "tags": each_like(like("tag"), 1)
-})
-```
-
-### C#
-```csharp
-using PactNet.Matchers;
-
-Match.Type("string")              // Any string
-Match.Type(123)                   // Any number
-Match.MinType(obj, 1)            // Array with min 1 item
-Match.Regex("^\\d+$", "123")     // Pattern matching
-```
-
-## 🎯 Test Templates
-
-### Consumer Test Template (TypeScript)
-```typescript
-describe('Service Contract', () => {
-  const provider = PactTestHelper.setupPactProvider('Consumer', 'Provider', 3001);
-
-  it('should handle successful request', async () => {
-    await provider
-      .given('provider state')
-      .uponReceiving('description of request')
-      .withRequest({
-        method: 'POST',
-        path: '/api/endpoint',
-        headers: { 'Content-Type': 'application/json' },
-        body: { /* request body */ }
-      })
-      .willRespondWith({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: { /* expected response */ }
-      });
-
-    await provider.executeTest(async (mockService) => {
-      // Your actual API call here
-      const response = await fetch(`${mockService.url}/api/endpoint`);
-      // Assertions
-    });
-  });
-});
-```
-
-### Provider Verification Template (Rust)
-```rust
-#[tokio::test]
-async fn verify_consumer_contract() {
-    let helper = PactTestHelper::new();
-    let pact_files = helper.load_pact_files("consumer", "provider").unwrap();
-    let provider = helper.setup_provider_verification("Provider", "http://localhost:8080");
-    
-    let result = verify_provider(provider, pact_files, &HashMap::new()).await;
-    assert!(result.is_ok());
+```json
+{
+  "description": "a request for shipping quote with valid items and address",
+  "request": {
+    "method": "POST",
+    "path": "/get-quote",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "items": [
+        {
+          "product_id": "OLJCESPC7Z",  ← Consumer expects this field
+          "quantity": 2
+        }
+      ],
+      "address": {
+        "street_address": "1600 Amphitheatre Parkway",  ← Consumer expects full address
+        "city": "Mountain View",
+        "state": "CA",
+        "country": "United States",
+        "zip_code": "94043"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "cost_usd": {
+        "currency_code": "USD",
+        "units": 8,
+        "nanos": 990000000
+      }
+    }
+  }
 }
 ```
 
-## 🐛 Common Issues & Fixes
+#### **3. What This Means**
+- **Consumer (frontend) expects**: Full product info + complete address
+- **Provider (shipping-service) reality**: Only accepts quantity + zip_code
+- **Result**: 500 Internal Server Error when consumer calls provider
 
-| Problem | Solution |
-|---------|----------|
-| **No pact file generated** | Check test passes and pact directory exists |
-| **Provider verification fails** | Ensure provider is running and accessible |
-| **Matcher errors** | Use `like()` instead of exact values |
-| **Timeout issues** | Increase timeout in pact configuration |
-| **State setup fails** | Verify provider state names match exactly |
+## 🕸️ Network Diagram
 
-## 🔍 Debug Commands
+### Navigate to: http://localhost:9292/network
 
-```bash
-# Check pact files
-ls -la pacts/consumer-contracts/
-cat pacts/consumer-contracts/*.json | jq .
+You'll see a **visual service map**:
 
-# Validate JSON structure
-find pacts -name "*.json" -exec jq . {} \;
-
-# Check service health
-curl http://localhost:8080/health
-
-# View logs
-cat pacts/provider-verification/*.log
-
-# Test individual services
-cd src/frontend && npm run test:pact:consumer
-cd src/checkout && go test -v ./contracts/...
-cd src/shipping && cargo test --test pact_verification
-cd src/accounting && dotnet test --filter PactVerification
+```
+    ┌─────────────┐
+    │   frontend  │
+    │             │
+    └──────┬──────┘
+           │
+           │ ❌ (failed contract)
+           │
+    ┌──────▼──────┐
+    │  shipping-  │
+    │   service   │
+    └─────────────┘
 ```
 
-## 📊 Best Practices Checklist
+### Color Coding
+- **🟢 Green Lines**: Contracts are verified and working
+- **🔴 Red Lines**: Contract verification failed
+- **🟡 Yellow Lines**: Contracts exist but not verified
+- **⚪ Gray Lines**: No contracts defined
 
-### ✅ Consumer Tests
-- [ ] Use descriptive test names
-- [ ] Focus on behavior, not implementation
-- [ ] Use appropriate matchers (`like()`, `eachLike()`)
-- [ ] Test error scenarios (4xx, 5xx responses)
-- [ ] Keep contracts minimal and focused
+## 📋 Understanding Your Current Results
 
-### ✅ Provider Verification
-- [ ] Set up proper provider states
-- [ ] Clean up test data after each test
-- [ ] Verify against real service endpoints
-- [ ] Handle authentication in tests
-- [ ] Run verification in CI pipeline
+### What Your Dashboard Shows
 
-### ✅ Contract Design
-- [ ] Version your contracts
-- [ ] Make new fields optional initially
-- [ ] Use semantic versioning
-- [ ] Document breaking changes
-- [ ] Maintain backward compatibility
+1. **Contract Exists**: ✅ Frontend has defined expectations for shipping service
+2. **Verification Status**: ❌ Failed (this is GOOD - it caught real issues!)
+3. **Specific Problems Found**:
+   - Consumer sends `product_id` but provider doesn't expect it
+   - Consumer sends full address but provider only uses `zip_code`
+   - Provider returns 500 errors instead of handling requests gracefully
 
-## 🚨 Anti-Patterns to Avoid
+### This is SUCCESS, Not Failure! 🎉
 
-❌ **Don't** use exact values everywhere
-```typescript
-// Bad
-body: { id: 123, name: "Exact Name" }
+**Why the ❌ status is actually great news:**
+- Your contract testing **caught real API compatibility issues**
+- Without this, you'd discover these problems in production
+- You now have **specific, actionable information** about what to fix
 
-// Good  
-body: { id: like(123), name: like("Any Name") }
-```
+## 🎯 Key Sections to Focus On
 
-❌ **Don't** test implementation details
-```typescript
-// Bad - testing internal structure
-body: { 
-  internal_id: like(123),
-  debug_info: like("internal details")
-}
+### 1. **Matrix View** (Main Dashboard)
+- Shows **all consumer-provider relationships**
+- **Status at a glance** for each contract
+- **Version tracking** for both sides
 
-// Good - testing public interface
-body: {
-  user_id: like(123),
-  display_name: like("User Name")
-}
-```
+### 2. **Individual Contract Pages**
+- **Detailed request/response examples**
+- **Exact field expectations**
+- **Matching rules** (how flexible the contract is)
 
-❌ **Don't** create brittle contracts
-```typescript
-// Bad - too specific
-body: {
-  created_at: "2024-01-15T10:30:00.000Z",
-  items: ["item1", "item2", "item3"]
-}
+### 3. **Network Diagram**
+- **Visual service dependencies**
+- **Overall system health** at a glance
+- **Impact analysis** (what breaks if one service changes)
 
-// Good - flexible
-body: {
-  created_at: regex(ISO_DATE_PATTERN, "2024-01-15T10:30:00.000Z"),
-  items: eachLike(like("item"), {min: 1})
-}
-```
+## 🔧 Common Dashboard Actions
 
-## 🔗 Useful Links
+### Check Contract Details
+1. Click on any consumer-provider row
+2. Review the "Interactions" section
+3. Compare expected vs actual API behavior
 
-- [Full Documentation](./CONTRACT_TESTING_GUIDE.md)
-- [Pact Official Docs](https://docs.pact.io/)
-- [Matcher Reference](https://docs.pact.io/implementation_guides/javascript/docs/matching)
-- [Best Practices](https://docs.pact.io/best_practices/contract_tests_not_functional_tests)
+### View Verification History
+1. Go to contract details page
+2. Look for "Verification Results" section
+3. See timeline of verification attempts
 
-## 💡 Pro Tips
+### Understand Matching Rules
+1. In contract details, find "Matching Rules"
+2. These show how flexible the contract is
+3. `like()` means "any value of this type"
+4. `eachLike()` means "array with items like this"
 
-1. **Start Simple**: Begin with one happy path, add complexity gradually
-2. **Test Locally**: Always run tests locally before pushing
-3. **Use Helpers**: Leverage shared utilities for consistent patterns
-4. **Document States**: Keep provider states well-documented
-5. **Monitor CI**: Set up alerts for contract test failures
-6. **Team Communication**: Share contract changes with affected teams
+## 🚨 Troubleshooting Your Results
+
+### If You See ❌ Failed Status
+
+**This is NORMAL and EXPECTED!** Here's why:
+
+1. **Your shipping service expects**:
+   ```json
+   {
+     "items": [{"quantity": 2}],
+     "address": {"zip_code": "94043"}
+   }
+   ```
+
+2. **Your frontend sends**:
+   ```json
+   {
+     "items": [{"product_id": "ABC123", "quantity": 2}],
+     "address": {
+       "street_address": "123 Main St",
+       "city": "Anytown",
+       "state": "CA", 
+       "country": "USA",
+       "zip_code": "94043"
+     }
+   }
+   ```
+
+3. **Result**: Service can't parse the request → 500 error
+
+### What the Dashboard Tells You
+
+- **Problem**: API format mismatch
+- **Impact**: Frontend calls will fail in production
+- **Solution**: Either update service to accept frontend's format, or update frontend to send service's format
+
+## 📈 Advanced Features
+
+### Can I Deploy?
+- Look for "Can I Deploy" section
+- Shows if it's safe to deploy each service version
+- Based on contract verification status
+
+### Webhooks
+- Set up notifications when contracts change
+- Trigger builds when verification fails
+- Keep teams informed of API changes
+
+### Version Tags
+- Tag versions as "production", "staging", etc.
+- Track which contracts are deployed where
+- Manage multiple environment compatibility
+
+## 🎓 Pro Tips for Reading Results
+
+### 1. **Red Status = Success**
+- Failed verification means you caught problems early
+- This prevents production failures
+- Focus on the specific mismatches shown
+
+### 2. **Look at Request/Response Details**
+- The exact JSON shows what's expected vs what's sent
+- Field names, types, and structure all matter
+- Missing fields are highlighted
+
+### 3. **Use Network Diagram for Big Picture**
+- See how services connect
+- Understand blast radius of changes
+- Plan rollout strategies
+
+### 4. **Version History is Key**
+- Track how contracts evolve over time
+- See when breaking changes were introduced
+- Plan backward compatibility
+
+## 🎯 Your Next Steps
+
+1. **Explore the dashboard** - click around and get familiar
+2. **Review the contract details** - understand exactly what's mismatched
+3. **Check the network diagram** - see the visual representation
+4. **Decide on fix strategy** - update consumer or provider?
+
+## 🤔 Questions to Ask Yourself
+
+When reviewing your dashboard:
+
+1. **Are the contract expectations reasonable?**
+2. **Should the provider accept more fields?**
+3. **Should the consumer send fewer fields?**
+4. **What's the impact of making changes?**
+5. **Which approach minimizes breaking changes?**
 
 ---
 
-*Need help? Check the [full guide](./CONTRACT_TESTING_GUIDE.md) or ask in #contract-testing Slack channel*
+**Remember**: A ❌ failed status in contract testing is often a ✅ success in catching real problems before they hit production!

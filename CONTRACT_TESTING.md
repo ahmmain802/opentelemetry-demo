@@ -1,225 +1,132 @@
-# Contract Testing Setup
+# Contract Testing with Pact
 
-This document describes the Pact contract testing infrastructure for the OpenTelemetry Demo microservices.
-
-## 📚 Documentation
-
-- **[🚀 Getting Started](docs/GETTING_STARTED.md)** - Quick start guide for new developers
-- **[📖 Complete Guide](docs/CONTRACT_TESTING_GUIDE.md)** - Comprehensive tutorial with examples and best practices
-- **[🐳 Containerized Testing](docs/CONTAINERIZED_TESTING.md)** - Docker-based testing guide
-- **[⚡ Quick Reference](docs/PACT_QUICK_REFERENCE.md)** - Commands, templates, and troubleshooting
-- **[🎯 Example Walkthrough](docs/EXAMPLE_WALKTHROUGH.md)** - Step-by-step implementation example
-
-### 🎓 For Junior Developers
-
-**New to contract testing?** Start here:
-1. **[🚀 Getting Started Guide](docs/GETTING_STARTED.md)** - 5-minute setup + learning path
-2. **[Validate your setup](pacts/validate-setup.sh)** - Check your environment
-3. **[Follow the example](docs/EXAMPLE_WALKTHROUGH.md)** - Hands-on tutorial
+This document describes the contract testing implementation for the OpenTelemetry Demo using Pact.
 
 ## Overview
 
-Contract testing is implemented using Pact for two critical service interactions:
+Contract testing ensures API compatibility between consumer and provider services by:
+- Consumers define their expectations of provider APIs
+- Providers verify they meet those expectations
+- Tests run independently without requiring both services to be running simultaneously
 
-1. **Frontend → Shipping Service**: HTTP/JSON communication for shipping quotes
-2. **Checkout → Accounting Service**: Kafka message-based communication for order processing
+## Quick Start
 
-## 🚀 Quick Start
-
-### Option 1: Containerized (Recommended for Junior Developers)
-
-**Prerequisites**: Just Docker Desktop
+### Run Complete Contract Testing Workflow
 
 ```bash
-# Complete setup and first test (recommended for beginners)
-make quickstart
-
-# Or step by step:
-make contracts-docker-build    # Build testing environment
-make contracts-docker-test     # Run all tests
+# Single command to run everything
+./run-full-contract-testing.sh
 ```
 
-### Option 2: Local Development
+This script will:
+1. Start Pact Broker (if not running)
+2. Publish consumer contracts
+3. Run provider verification tests
+4. Publish verification results
+5. Show contract testing matrix and summary
 
-**Prerequisites**: Node.js 18+, Go 1.24+, Rust 1.70+, .NET 8.0+
+### View Results
+- **Pact Broker UI**: http://localhost:9292
+- **Matrix View**: http://localhost:9292/matrix
+- **Consumer**: http://localhost:9292/pacticipants/frontend
+- **Provider**: http://localhost:9292/pacticipants/shipping-service
 
-```bash
-# Validate your local environment first
-make contracts-validate
+## Architecture
 
-# Run all tests locally
-make contracts-test
-```
+The implementation covers:
 
-### Quick Commands
+**Frontend → Shipping Service** (HTTP/JSON)
+- Consumer: Frontend (TypeScript/Next.js)
+- Provider: Shipping Service (Rust/Actix)
+- Protocol: HTTP POST to `/get-quote`
 
-```bash
-# Using Make (recommended)
-make contracts-test              # Run all tests (auto-detects Docker)
-make contracts-consumer          # Run consumer tests only
-make contracts-provider          # Run provider verification only
-make status                      # Check current status
+## Contract Details
 
-# Using scripts directly
-./pacts/run-contract-tests.sh           # Local testing
-./pacts/run-contract-tests-docker.sh    # Containerized testing
-```
+### Frontend → Shipping Service Contract
 
-### Run Individual Service Tests
-
-#### Frontend Consumer Tests
-```bash
-cd src/frontend
-npm install
-npm run test:pact:consumer
-```
-
-#### Checkout Consumer Tests
-```bash
-cd src/checkout
-go mod tidy
-go test -v ./contracts/...
-```
-
-#### Shipping Provider Verification
-```bash
-cd src/shipping
-cargo test --test pact_verification
-```
-
-#### Accounting Provider Verification
-```bash
-cd src/accounting
-dotnet test --filter "Category=PactVerification"
-```
-
-## Directory Structure
-
-```
-pacts/
-├── consumer-contracts/          # Generated pact files
-│   ├── frontend-shipping.json
-│   └── checkout-accounting.json
-├── provider-verification/       # Verification logs
-├── shared/                     # Shared utilities
-│   ├── pact-config.yml        # Configuration
-│   └── test-utils.ts          # TypeScript utilities
-└── run-contract-tests.sh      # Master test script
-```
-
-## Service-Specific Setup
-
-### Frontend (TypeScript/Jest)
-- **Dependencies**: `@pact-foundation/pact`, `jest`, `ts-jest`
-- **Test Location**: `src/frontend/__tests__/contracts/`
-- **Configuration**: `jest.config.js`
-
-### Checkout (Go)
-- **Dependencies**: `github.com/pact-foundation/pact-go/v2`
-- **Test Location**: `src/checkout/contracts/`
-- **Utilities**: `test_utils.go`
-
-### Shipping (Rust/Cargo)
-- **Dependencies**: `pact_verifier`, `tokio-test`
-- **Test Location**: `src/shipping/tests/`
-- **Utilities**: `pact_utils.rs`
-
-### Accounting (C#/.NET)
-- **Dependencies**: `PactNet`, `xunit`
-- **Test Location**: `src/accounting/Tests/`
-- **Utilities**: `PactTestHelper.cs`
-
-## Contract Definitions
-
-### Frontend → Shipping Service
-
-**Endpoint**: `POST /get-quote`
-
-**Request**:
+**Request Format**:
 ```json
 {
-  "items": [{"product_id": "string", "quantity": number}],
+  "items": [
+    {"product_id": "OLJCESPC7Z", "quantity": 2}
+  ],
   "address": {
-    "street_address": "string",
-    "city": "string", 
-    "state": "string",
-    "country": "string",
-    "zip_code": "string"
+    "street_address": "1600 Amphitheatre Parkway",
+    "city": "Mountain View",
+    "state": "CA",
+    "country": "United States",
+    "zip_code": "94043"
   }
 }
 ```
 
-**Response**:
+**Response Format**:
 ```json
 {
   "cost_usd": {
     "currency_code": "USD",
-    "units": number,
-    "nanos": number
+    "units": 8,
+    "nanos": 990000000
   }
 }
 ```
 
-### Checkout → Accounting Service
+**Contract Expectations**:
+- Returns 200 OK for valid requests
+- Returns 400 Bad Request for empty items array
+- Returns 400 Bad Request for missing address fields
+- Response always includes `cost_usd` with USD currency
+- Supports international addresses
 
-**Topic**: `orders`
+## Implementation Status
 
-**Message** (Protobuf OrderResult):
-```protobuf
-message OrderResult {
-  string order_id = 1;
-  string shipping_tracking_id = 2;
-  Money shipping_cost = 3;
-  Address shipping_address = 4;
-  repeated OrderItem items = 5;
-}
+### Completed ✅
+- Pact Broker setup with Docker Compose
+- Frontend consumer contract tests
+- Shipping service provider verification tests
+- Contract violation detection and reporting
+- Automated publishing to Pact Broker
+- Complete workflow automation
+
+### Contract Violations Found
+
+The current implementation has identified **7 contract violations**:
+
+1. **Data Structure Mismatches**:
+   - Shipping service expects only `quantity` but consumer sends `product_id`
+   - Shipping service expects only `zip_code` but consumer sends full address
+
+2. **Validation Issues**:
+   - Service returns 500 errors instead of 400 for validation failures
+   - Missing request validation for empty items and invalid data
+
+These violations demonstrate that contract testing is working correctly by identifying real API compatibility issues.
+
+## Files and Directories
+
+```
+├── run-full-contract-testing.sh     # Main workflow script
+├── docker-compose.pact-broker.yml   # Pact Broker setup
+├── CONTRACT_TESTING_EXECUTION_REPORT.md  # Detailed results
+├── src/shipping/tests/               # Provider verification tests
+└── pacts/consumer-contracts/         # Consumer contract files
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Pact files not generated**: Check consumer test execution and file permissions
-2. **Provider verification fails**: Ensure provider service is running and accessible
-3. **Dependency conflicts**: Run `npm install`, `go mod tidy`, `cargo update`, or `dotnet restore`
+1. **Pact Broker Connection Failed**:
+   ```bash
+   curl http://localhost:9292  # Check if broker is running
+   ```
 
-### Debug Commands
+2. **Contract Verification Failures**:
+   - Review violation messages in test output
+   - Check provider implementation matches consumer expectations
 
-```bash
-# Check generated pact files
-ls -la pacts/consumer-contracts/
+### Getting Help
 
-# View verification logs
-cat pacts/provider-verification/*.log
-
-# Validate pact file structure
-cat pacts/consumer-contracts/frontend-shipping.json | jq .
-```
-
-### Test Data
-
-All services use consistent test data defined in shared utilities:
-
-- **Product IDs**: `OLJCESPC7Z`, `66VCHSJNUP`
-- **Test Address**: 1600 Amphitheatre Parkway, Mountain View, CA 94043
-- **Currency**: USD only
-- **Tracking ID Format**: `Z[A-Z0-9]{8}`
-
-## Next Steps
-
-After setting up the infrastructure:
-
-1. Implement consumer contract tests (Task 2)
-2. Implement provider verification tests (Tasks 3, 5)
-3. Add comprehensive test scenarios (Tasks 4, 6)
-4. Create documentation and examples (Task 7)
-5. Validate end-to-end workflow (Task 8)
-
-## Support
-
-For issues with contract testing setup:
-
-1. Check service-specific README files
-2. Review generated logs in `pacts/provider-verification/`
-3. Validate pact file structure in `pacts/consumer-contracts/`
-4. Ensure all prerequisites are installed and up-to-date
+- Check the Pact documentation: https://docs.pact.io/
+- Review `CONTRACT_TESTING_EXECUTION_REPORT.md` for detailed analysis
+- Use Pact Broker UI to visualize contract relationships
